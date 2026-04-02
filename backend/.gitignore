@@ -1,0 +1,19 @@
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Build and temporary files
+build/
+dist/
+*.log
+*.tmp
+tea.db
+
+# Environment variables and secrets
+.env
+.env.local
+
+# Dependency directories (Language specific)
+node_modules/
+venv/
+.tox/

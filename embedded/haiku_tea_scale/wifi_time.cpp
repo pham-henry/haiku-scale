@@ -23,14 +23,23 @@ void connectWiFi(const char* ssid, const char* password) {
   WiFi.begin(ssid, password);
 
   Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
+
+  unsigned long start = millis();
+  const unsigned long timeout = 10000; // 10 seconds
+
+  while (WiFi.status() != WL_CONNECTED && millis() - start < timeout) {
     delay(500);
     Serial.print(".");
   }
 
   Serial.println();
-  Serial.print("Connected. IP: ");
-  Serial.println(WiFi.localIP());
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("Connected. IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("WiFi connection failed. Continuing without WiFi.");
+  }
 }
 
 void maintainWiFi(const char* ssid, const char* password) {

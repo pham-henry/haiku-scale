@@ -85,27 +85,34 @@ app.post("/api/tea-weight", (req, res) => {
   `;
 
   db.run(
-    sql,
-    [
-      device_id,
-      Number.isFinite(unix_time) ? unix_time : null,
-      weight_g,
-      state,
-      signal_ok ? 1 : 0,
-      buffered ? 1 : 0
-    ],
-    function (err) {
-      if (err) {
-        console.error("Insert failed:", err.message);
-        return res.status(500).json({ error: "Database insert failed" });
-      }
-
-      res.status(201).json({
-        ok: true,
-        id: this.lastID
-      });
+  sql,
+  [
+    device_id,
+    Number.isFinite(unix_time) ? unix_time : null,
+    weight_g,
+    state,
+    signal_ok ? 1 : 0,
+    buffered ? 1 : 0
+  ],
+  function (err) {
+    if (err) {
+      console.error("Insert failed:", err.message);
+      return res.status(500).json({ error: "Database insert failed" });
     }
-  );
+
+    // ✅ NEW: log success to terminal
+    console.log(
+      `[POST SUCCESS] id=${this.lastID} | device=${device_id} | weight=${weight_g.toFixed(
+        1
+      )}g | state=${state} | buffered=${buffered}`
+    );
+
+    res.status(201).json({
+      ok: true,
+      id: this.lastID
+    });
+  }
+);
 });
 
 // Get recent measurements

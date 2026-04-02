@@ -1,44 +1,43 @@
+/*
+  scale_sensor.cpp
+
+  Purpose:
+  This file interfaces with the HX711 and load cells to produce stable weight readings.
+
+  Responsibilities:
+  - Initialize the HX711
+  - Apply the calibration factor
+  - Read raw weight values
+  - Smooth readings using a 10-sample moving average
+  - Return the latest stable filtered weight
+
+  Why it matters:
+  This is the sensing layer of the project. The quality of this signal directly
+  affects backend predictions and alert quality.
+*/
+
 #include "scale_sensor.h"
 
 #include <Arduino.h>
 #include "HX711.h"
 #include "config.h"
 
-/*
-  scale_sensor.cpp
-
-  Purpose:
-  This file manages the load cell and HX711 amplifier used to measure tea container weight.
-
-  Responsibilities:
-  - Initialize the HX711 and apply the calibration factor
-  - Tare the scale at startup
-  - Read weight data from the sensor
-  - Filter noisy readings using a moving average
-  - Return a stable weight value for the rest of the system
-
-  Why it matters:
-  This is the sensing layer of the project. Accurate and stable weight readings
-  are critical because the backend depends on this data to estimate tea depletion
-  and determine when workers should be alerted.
-*/
-
 static HX711 scale;
-
 static float weightBuffer[MOVING_AVG_WINDOW] = {0};
 static int bufferIndex = 0;
 static bool bufferFilled = false;
-
 static float lastWeight = 0.0f;
 
 void initScale(int doutPin, int sckPin, float calibrationFactor) {
   scale.begin(doutPin, sckPin);
   scale.set_scale(calibrationFactor);
 
-  delay(500);   // allow sensor to settle
-  scale.tare(); // assumes empty stand at startup
+  delay(500);
+  Serial.println("Scale initialized. No auto-tare performed.");
+}
 
-  Serial.println("Scale initialized and tared.");
+bool scaleSignalReady() {
+  return scale.is_ready();
 }
 
 float readFilteredWeight() {
@@ -52,15 +51,15 @@ float readFilteredWeight() {
     return lastWeight;
   }
 
-  weightBuffer[bufferIndex] = w;
-  bufferIndex = (bufferIndex + 1) % MOVING_AVG_WINDOW;
-
-  if (bufferIndex == 0) {
-    bufferFilled = true;
+  if (fabs(w) < ZERO_CLAMP_THRESHOLD_G) {
+    w = 0.0f;
   }
 
-  int count = bufferFilled ? MOVING_AVG_WINDOW : bufferIndex;
+  weightBuffer[bufferIndex] = w;
+  bufferIndex = (bufferIndex + 1) % MOVING_AVG_WINDOW;
+  if (bufferIndex == 0) bufferFilled = true;
 
+  int count = bufferFilled ? MOVING_AVG_WINDOW : bufferIndex;
   if (count <= 0) {
     lastWeight = w;
     return w;
@@ -71,14 +70,13 @@ float readFilteredWeight() {
     sum += weightBuffer[i];
   }
 
-  float avg = sum / count;
+  lastWeight = sum / count;
 
-  if (fabs(avg) < ZERO_CLAMP_THRESHOLD_G) {
-    avg = 0.0f;
+  if (fabs(lastWeight) < ZERO_CLAMP_THRESHOLD_G) {
+    lastWeight = 0.0f;
   }
 
-  lastWeight = avg;
-  return avg;
+  return lastWeight;
 }
 
 float getLastWeight() {

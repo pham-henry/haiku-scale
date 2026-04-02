@@ -1,8 +1,6 @@
 #pragma once
 
 void initScale(int doutPin, int sckPin, float calibrationFactor);
-
-// Returns filtered weight in grams
+bool scaleSignalReady();
 float readFilteredWeight();
-
 float getLastWeight();

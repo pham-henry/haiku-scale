@@ -1,26 +1,22 @@
+/*
+  wifi_time.cpp
+
+  Purpose:
+  This file manages Wi-Fi connectivity and UTC time synchronization.
+
+  Responsibilities:
+  - Connect the ESP32 to Wi-Fi
+  - Reconnect automatically if Wi-Fi drops
+  - Sync time using NTP
+  - Provide Unix time and ISO 8601 UTC timestamps for measurements
+*/
+
 #include "wifi_time.h"
 
 #include <WiFi.h>
 #include "time.h"
 
-/*
-  wifi_time.cpp
-
-  Purpose:
-  This file handles network connectivity and time synchronization for the ESP32.
-
-  Responsibilities:
-  - Connect the ESP32 to Wi-Fi
-  - Reconnect if Wi-Fi is lost during runtime
-  - Synchronize the device clock using NTP
-  - Provide UTC timestamps in ISO 8601 format for backend data uploads
-
-  Why it matters:
-  The system needs reliable internet access to send measurements to the backend,
-  and accurate timestamps so the backend can analyze tea usage over time.
-
-  // THINK about how much storage can be saved, incase wifi is out, whats the most amount of data i can store and send back to my backend service
-*/
+static bool g_timeSynced = false;
 
 void connectWiFi(const char* ssid, const char* password) {
   WiFi.mode(WIFI_STA);
@@ -38,9 +34,7 @@ void connectWiFi(const char* ssid, const char* password) {
 }
 
 void maintainWiFi(const char* ssid, const char* password) {
-  if (WiFi.status() == WL_CONNECTED) {
-    return;
-  }
+  if (WiFi.status() == WL_CONNECTED) return;
 
   Serial.println("WiFi disconnected. Reconnecting...");
   WiFi.disconnect();
@@ -66,13 +60,33 @@ void initTime(const char* ntpServer, long gmtOffsetSec, int daylightOffsetSec) {
 
   Serial.print("Syncing time");
   struct tm timeinfo;
-  while (!getLocalTime(&timeinfo)) {
+  unsigned long start = millis();
+
+  while (!getLocalTime(&timeinfo) && millis() - start < 15000) {
     Serial.print(".");
     delay(500);
   }
 
   Serial.println();
-  Serial.println("Time synced.");
+
+  g_timeSynced = getLocalTime(&timeinfo);
+  if (g_timeSynced) {
+    Serial.println("Time synced.");
+  } else {
+    Serial.println("Time sync failed. Will continue and retry later.");
+  }
+}
+
+bool isTimeSynced() {
+  struct tm timeinfo;
+  g_timeSynced = getLocalTime(&timeinfo);
+  return g_timeSynced;
+}
+
+uint32_t getUnixTimeUtc() {
+  time_t now;
+  time(&now);
+  return static_cast<uint32_t>(now);
 }
 
 String getIsoTimestampUtc() {

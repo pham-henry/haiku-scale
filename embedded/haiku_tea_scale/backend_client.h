@@ -1,5 +1,6 @@
 #pragma once
 
 #include <Arduino.h>
+#include "measurement.h"
 
-void postMeasurement(const char* serverUrl, float weight_g, const String& timestamp);
+bool postMeasurement(const char* serverUrl, const char* deviceId, const Measurement& m, bool buffered);

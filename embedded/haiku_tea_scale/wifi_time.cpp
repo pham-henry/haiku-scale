@@ -1,14 +1,11 @@
 /*
   wifi_time.cpp
 
-  Purpose:
-  This file manages Wi-Fi connectivity and UTC time synchronization.
+  Manage Wi-Fi connectivity and UTC time synchronization.
 
-  Responsibilities:
-  - Connect the ESP32 to Wi-Fi
-  - Reconnect automatically if Wi-Fi drops
-  - Sync time using NTP
-  - Provide Unix time and ISO 8601 UTC timestamps for measurements
+  It keeps network recovery out of the sensing loop. Initial connection gets a
+  short blocking attempt, while later reconnects are rate-limited so HX711
+  sampling continues even when the cafe network or backend is unavailable.
 */
 
 #include "wifi_time.h"
@@ -17,6 +14,10 @@
 #include "time.h"
 
 static bool g_timeSynced = false;
+static unsigned long lastReconnectAttemptMs = 0;
+static unsigned long lastTimeRetryMs = 0;
+static const unsigned long WIFI_RECONNECT_INTERVAL_MS = 15000;
+static const unsigned long TIME_RETRY_INTERVAL_MS = 60000;
 
 void connectWiFi(const char* ssid, const char* password) {
   WiFi.mode(WIFI_STA);
@@ -45,22 +46,19 @@ void connectWiFi(const char* ssid, const char* password) {
 void maintainWiFi(const char* ssid, const char* password) {
   if (WiFi.status() == WL_CONNECTED) return;
 
-  Serial.println("WiFi disconnected. Reconnecting...");
+  unsigned long now = millis();
+  if (now - lastReconnectAttemptMs < WIFI_RECONNECT_INTERVAL_MS) return;
+  lastReconnectAttemptMs = now;
+
+  Serial.println("WiFi disconnected. Starting reconnect attempt.");
   WiFi.disconnect();
   WiFi.begin(ssid, password);
-
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
-    delay(250);
-    Serial.print(".");
-  }
-  Serial.println();
 
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("Reconnected. IP: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("Reconnect attempt timed out.");
+    Serial.println("Reconnect started; continuing local sampling.");
   }
 }
 
@@ -90,6 +88,19 @@ bool isTimeSynced() {
   struct tm timeinfo;
   g_timeSynced = getLocalTime(&timeinfo);
   return g_timeSynced;
+}
+
+void retryTimeSyncIfNeeded(const char* ntpServer, long gmtOffsetSec, int daylightOffsetSec) {
+  if (g_timeSynced || WiFi.status() != WL_CONNECTED) return;
+
+  unsigned long now = millis();
+  if (now - lastTimeRetryMs < TIME_RETRY_INTERVAL_MS) return;
+  lastTimeRetryMs = now;
+
+  configTime(gmtOffsetSec, daylightOffsetSec, ntpServer);
+  struct tm timeinfo;
+  g_timeSynced = getLocalTime(&timeinfo, 1000);
+  Serial.println(g_timeSynced ? "Time sync recovered." : "Time sync retry failed.");
 }
 
 uint32_t getUnixTimeUtc() {

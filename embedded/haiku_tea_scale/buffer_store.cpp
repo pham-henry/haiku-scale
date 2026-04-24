@@ -1,23 +1,17 @@
 /*
   buffer_store.cpp
 
-  Purpose:
-  This file provides an in-memory ring buffer for measurement data when Wi-Fi
-  or the backend is unavailable.
+  Provide a compact in-memory outage buffer for device events.
 
-  Responsibilities:
-  - Store measurements during outages
-  - Hold up to 30 minutes of 1 Hz data
-  - Flush oldest-first when connectivity returns
-
-  Why it matters:
-  This keeps the system resilient during temporary outages without losing recent data.
+  It exists so sensing continues while Wi-Fi or the backend is down. The buffer
+  stores structs, flushes oldest-first, and intentionally overwrites oldest data
+  after the configured 30-minute MVP window.
 */
 
 #include "buffer_store.h"
 #include "config.h"
 
-static Measurement ringBuffer[BUFFER_SIZE];
+static BufferedMeasurement ringBuffer[BUFFER_SIZE];
 static int head = 0;
 static int tail = 0;
 static int count = 0;
@@ -28,22 +22,23 @@ void bufferInit() {
   count = 0;
 }
 
-bool bufferPush(const Measurement& m) {
+bool bufferPush(const Measurement& m, ReportReason reason) {
   if (count == BUFFER_SIZE) {
     // overwrite oldest
     tail = (tail + 1) % BUFFER_SIZE;
     count--;
   }
 
-  ringBuffer[head] = m;
+  ringBuffer[head].measurement = m;
+  ringBuffer[head].reason = reason;
   head = (head + 1) % BUFFER_SIZE;
   count++;
   return true;
 }
 
-bool bufferPeek(Measurement& m) {
+bool bufferPeek(BufferedMeasurement& item) {
   if (count == 0) return false;
-  m = ringBuffer[tail];
+  item = ringBuffer[tail];
   return true;
 }
 

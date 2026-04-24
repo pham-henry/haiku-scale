@@ -2,8 +2,11 @@
 
 #include "measurement.h"
 
+struct ScaleReading;
+
 void initStateDetector();
-DeviceState updateDeviceState(float weight_g, bool signal_ok);
+DeviceState updateDeviceState(const ScaleReading& reading);
 DeviceState getCurrentState();
 bool didStateChange();
 bool isWeightStable();
+float getLastStableWeight();
